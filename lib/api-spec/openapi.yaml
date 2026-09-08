@@ -10,6 +10,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: orders
+    description: Order handoff operations
+  - name: inventory
+    description: Inventory and restocking operations
+  - name: dashboard
+    description: Dashboard summaries and activity
 paths:
   /healthz:
     get:
@@ -24,7 +30,160 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List recent orders
+      responses:
+        "200":
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create an order request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /orders/{id}/confirm:
+    patch:
+      operationId: confirmOrder
+      tags: [orders]
+      summary: Confirm an order and deduct inventory
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Confirmed order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /orders/{id}/acknowledge:
+    patch:
+      operationId: acknowledgeOrder
+      tags: [orders]
+      summary: Mark an order as received
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Completed order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /inventory:
+    get:
+      operationId: listInventory
+      tags: [inventory]
+      summary: List supplied inventory
+      responses:
+        "200":
+          description: Inventory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+  /inventory/{itemName}:
+    patch:
+      operationId: updateInventory
+      tags: [inventory]
+      summary: Update a low stock threshold
+      parameters:
+        - $ref: "#/components/parameters/ItemName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryUpdate"
+      responses:
+        "200":
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+  /inventory/{itemName}/restock:
+    post:
+      operationId: restockInventory
+      tags: [inventory]
+      summary: Add stock and log the restock
+      parameters:
+        - $ref: "#/components/parameters/ItemName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestockInput"
+      responses:
+        "200":
+          description: Restocked inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [dashboard]
+      summary: List recent activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
 components:
+  parameters:
+    OrderId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    ItemName:
+      name: itemName
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +192,96 @@ components:
           type: string
       required:
         - status
+    Order:
+      type: object
+      required: [id, itemName, quantity, status, timeRequested]
+      properties:
+        id:
+          type: integer
+        itemName:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [pending, confirmed, completed]
+        timeRequested:
+          type: string
+          format: date-time
+        timeConfirmed:
+          type: [string, "null"]
+          format: date-time
+        timeAcknowledged:
+          type: [string, "null"]
+          format: date-time
+    OrderInput:
+      type: object
+      required: [itemName, quantity]
+      properties:
+        itemName:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          minimum: 1
+    InventoryItem:
+      type: object
+      required: [itemName, currentStock, lowStockThreshold, isLowStock, lastRestockedTime]
+      properties:
+        itemName:
+          type: string
+        currentStock:
+          type: integer
+          minimum: 0
+        lowStockThreshold:
+          type: integer
+          minimum: 0
+        isLowStock:
+          type: boolean
+        lastRestockedTime:
+          type: [string, "null"]
+          format: date-time
+    InventoryUpdate:
+      type: object
+      required: [lowStockThreshold]
+      properties:
+        lowStockThreshold:
+          type: integer
+          minimum: 0
+    RestockInput:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+    Activity:
+      type: object
+      required: [id, kind, message, timestamp]
+      properties:
+        id:
+          type: integer
+        kind:
+          type: string
+          enum: [order, restock, low_stock]
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        itemName:
+          type: [string, "null"]
+    DashboardSummary:
+      type: object
+      required: [pendingOrders, confirmedToday, lowStockItems, totalItems]
+      properties:
+        pendingOrders:
+          type: integer
+        confirmedToday:
+          type: integer
+        lowStockItems:
+          type: integer
+        totalItems:
+          type: integer
 

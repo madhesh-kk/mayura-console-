@@ -1,0 +1,91 @@
+Build a two-shop order & inventory notification web app for a real-world 
+local business use case:
+
+CONTEXT:
+Shop 1 sells everything except tea-related items. Shop 2 (located 50 meters 
+away) supplies tea items to Shop 1. When a customer at Shop 1 wants tea, 
+Shop 1 sends a request through this website. Shop 2 gets notified with a 
+repeating Tamil voice announcement until they confirm. Shop 2 also tracks 
+stock of the items they supply and gets alerted when stock runs low.
+
+TECH STACK: HTML, CSS, JavaScript (vanilla or React), Node.js/Express 
+backend, SQLite (or in-memory store) for data, Socket.IO for real-time 
+sync between the two shop pages. Use the Web Speech API 
+(SpeechSynthesisUtterance) with language code "ta-IN" for free Tamil 
+text-to-speech — no paid API keys.
+
+===========================
+PAGE 1: SHOP 1 (Order Sender)
+===========================
+- Order form: dropdown/buttons to select item + quantity, "Send Request" 
+  button.
+- Live order status: "Waiting for Shop 2 confirmation" -> "Confirmed" -> 
+  "Delivered/Completed".
+- Once Shop 2 confirms, start a 5-minute countdown with an "Acknowledge / 
+  Received" button. If not clicked within 5 minutes, trigger another 
+  reminder alert back on Shop 2's page.
+- Read-only inventory panel: shows current stock levels of items Shop 2 
+  supplies, with a red "Low Stock" badge if below threshold, so Shop 1 
+  knows what's realistically available before ordering.
+
+===========================
+PAGE 2: SHOP 2 (Order Receiver & Inventory Manager)
+===========================
+- Real-time incoming order list. New order triggers a REPEATING Tamil 
+  voice + beep alert every 10–15 seconds 
+  (e.g., "ஒரு தேநீர் ஆர்டர் வந்துள்ளது, தயவுசெய்து உறுதிப்படுத்தவும்") 
+  until Shop 2 clicks "Confirm Order".
+- Confirming an order: stops the voice loop, notifies Shop 1 instantly, 
+  and automatically DEDUCTS the ordered quantity from that item's stock 
+  count.
+- Inventory panel: table of all supplied items with current stock count 
+  and an editable low-stock threshold per item.
+- "Update Stock" / "Restocked" button to manually add quantity after 
+  restocking, which resets/increases the stock count and logs the 
+  restock time.
+- Low Stock Alert: whenever an item's stock falls below its threshold 
+  (after an order or manual update), trigger a repeating Tamil voice 
+  alert (e.g., "[item name] இருப்பு குறைவாக உள்ளது, தயவுசெய்து நிரப்பவும்") 
+  plus a visual banner, repeating every few minutes until marked 
+  "Restocked".
+
+===========================
+LOGIC FLOW
+===========================
+1. Shop 1 submits order -> saved as "pending" -> Shop 2 notified via socket.
+2. Shop 2's page loops Tamil voice announcement of item + quantity until 
+   confirmed.
+3. Shop 2 clicks "Confirm" -> stock auto-deducted -> Shop 1 notified -> 
+   5-min acknowledgment timer starts on Shop 1's page.
+4. If Shop 1 doesn't acknowledge in 5 minutes -> reminder alert re-fires 
+   on Shop 2's page.
+5. Shop 1 acknowledges -> order marked "Completed" and logged in order 
+   history.
+6. Independently, any time stock drops below threshold -> low-stock 
+   voice + visual alert loops on Shop 2's page until restocked.
+
+===========================
+DATABASE TABLES
+===========================
+- orders: id, item_name, quantity, status (pending/confirmed/completed), 
+  time_requested, time_confirmed, time_acknowledged.
+- inventory: item_name, current_stock, low_stock_threshold, 
+  last_restocked_time.
+- restock_history: item_name, restocked_quantity, timestamp.
+
+===========================
+ADDITIONAL REQUIREMENTS
+===========================
+- Large, simple buttons/text — intended for non-tech-savvy shop staff, 
+  used mostly on mobile phones/tablets.
+- Beep sound alongside every voice alert for extra attention.
+- Full order history and restock history visible to both shops.
+- Fallback polling in case WebSocket connection drops (important since 
+  this runs on mobile browsers that may background the tab).
+- Keep everything free/no-API-key based, since this is a low-budget tool 
+  for a small local shop.
+
+Please scaffold this as a complete, working project with a clear file 
+structure, functioning Socket.IO real-time sync, working Tamil voice 
+alerts via Web Speech API, and a working SQLite (or in-memory) database 
+for orders and inventory.

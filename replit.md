@@ -1,44 +1,49 @@
-# [Project name]
+# Steepbridge
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Steepbridge is a static two-shop tea order and inventory handoff app backed by Firebase Realtime Database.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/shop-bridge run dev` — run the static frontend
+- `pnpm --filter @workspace/shop-bridge run typecheck` — check the frontend
+- `pnpm --filter @workspace/shop-bridge run build` — create the static build
+- Add Firebase Web SDK values as `VITE_FIREBASE_*` environment variables to enable shared live data.
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React + Vite + TypeScript
+- Shared data: Firebase Realtime Database client SDK
+- Alerts: Web Speech API (`ta-IN`) plus Web Audio API beep
+- Hosting: any static host, including Firebase Hosting or Replit static publishing
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/shop-bridge/src/App.tsx` — Shop 1, Shop 2, and Firebase setup screens
+- `artifacts/shop-bridge/src/hooks/use-shop-data.ts` — shared data listeners, demo mode, and mutations
+- `artifacts/shop-bridge/src/hooks/use-tamil-alerts.ts` — Tamil voice and beep notification loops
+- `artifacts/shop-bridge/src/lib/firebase.ts` — Firebase initialization and Realtime Database writes
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Firebase configuration is read from `VITE_FIREBASE_*` values so the same static build can be connected to a shop-owned Firebase project.
+- When Firebase is not configured, the app uses a local demo store and clearly labels the workspace as demo mode.
+- Order confirmation deducts stock on the client with a Realtime Database transaction before marking the order confirmed.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Shop 1 creates tea requests, sees status changes, acknowledges delivery, and reads current stock.
+- Shop 2 confirms requests, edits thresholds, restocks items, and sees shared histories.
+- Pending orders, missed acknowledgements, and low stock can announce in Tamil with repeatable beep and voice alerts.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the app frontend-only; Firebase is the shared data layer and no custom server is required.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Browser audio may require one tap on “Enable sound alerts” before voice and beep notifications can play.
+- Firebase Realtime Database rules must be configured in the user’s Firebase project before sharing the app publicly.
 
 ## Pointers
 

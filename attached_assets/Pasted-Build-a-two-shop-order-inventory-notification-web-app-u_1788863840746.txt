@@ -1,0 +1,94 @@
+Build a two-shop order & inventory notification web app using ONLY 
+frontend code (HTML, CSS, JavaScript) with Firebase Realtime Database 
+(or Firestore) as the shared data layer — NO custom backend server, 
+NO Node.js/Express, no self-hosted database. Use Firebase's free Spark 
+plan.
+
+CONTEXT:
+Shop 1 sells everything except tea-related items. Shop 2 (50 meters away) 
+supplies tea items to Shop 1. Shop 1 sends order requests through this 
+website; Shop 2 gets a repeating Tamil voice notification until they 
+confirm. Shop 2 also tracks stock of supplied items and gets alerted when 
+stock runs low. Both shops use separate devices (phones/tablets) connected 
+to the internet.
+
+TECH STACK:
+- Plain HTML/CSS/JavaScript (or React) - static site only.
+- Firebase Realtime Database for shared/live data (orders + inventory), 
+  using onValue() listeners for real-time sync between devices.
+- Firebase Anonymous Auth (optional, simple) or no auth at all since this 
+  is an internal 2-shop tool.
+- Web Speech API (SpeechSynthesisUtterance, language "ta-IN") for free 
+  Tamil voice alerts.
+- Can be hosted for free on Firebase Hosting, GitHub Pages, or Replit's 
+  static hosting.
+
+===========================
+PAGE 1: SHOP 1 (Order Sender) - shop1.html
+===========================
+- Order form: item dropdown/buttons + quantity + "Send Request" button.
+- Writes new order object directly to Firebase Realtime Database under 
+  "orders/{orderId}" with status "pending".
+- Listens (onValue) to that order's status in Firebase and updates UI live: 
+  "Waiting for Shop 2 confirmation" -> "Confirmed" -> "Completed".
+- When status becomes "confirmed", start a 5-minute countdown with an 
+  "Acknowledge / Received" button. If not clicked in 5 minutes, update a 
+  Firebase field like "reminder_needed: true" which Shop 2's page listens 
+  for and re-triggers its alert.
+- Read-only inventory panel: listens to "inventory/" node in Firebase, 
+  shows stock counts with a red "Low Stock" badge if below threshold.
+
+===========================
+PAGE 2: SHOP 2 (Order Receiver & Inventory Manager) - shop2.html
+===========================
+- Listens (onValue) to "orders/" node in Firebase for new "pending" orders.
+- On new pending order: loop a Tamil voice + beep alert every 10-15 seconds 
+  (e.g., "ஒரு தேநீர் ஆர்டர் வந்துள்ளது, தயவுசெய்து உறுதிப்படுத்தவும்") 
+  until "Confirm Order" button is clicked.
+- Clicking Confirm: updates that order's status to "confirmed" in Firebase, 
+  stops the voice loop, and deducts the ordered quantity from 
+  "inventory/{item}/current_stock" in Firebase.
+- If "reminder_needed" becomes true on any confirmed order, re-trigger the 
+  Tamil voice alert loop again until Shop 1 acknowledges (status set to 
+  "completed").
+- Inventory panel: listens to "inventory/" node, shows item name, current 
+  stock, editable low_stock_threshold.
+- "Restocked" button: updates current_stock in Firebase and logs entry 
+  under "restock_history/{id}" with timestamp.
+- Low Stock Alert: a client-side listener checks if any item's current 
+  stock < threshold; if so, loop a Tamil voice alert 
+  (e.g., "[item name] இருப்பு குறைவாக உள்ளது, தயவுசெய்து நிரப்பவும்") 
+  every few minutes until restocked.
+
+===========================
+FIREBASE DATA STRUCTURE
+===========================
+orders/
+  {orderId}: { item_name, quantity, status, time_requested, 
+               time_confirmed, time_acknowledged, reminder_needed }
+inventory/
+  {item_name}: { current_stock, low_stock_threshold, last_restocked_time }
+restock_history/
+  {id}: { item_name, restocked_quantity, timestamp }
+
+===========================
+ADDITIONAL REQUIREMENTS
+===========================
+- Large, simple buttons/text for non-tech-savvy shop staff, mobile-first 
+  design.
+- Beep sound alongside every voice alert.
+- Order history and restock history visible on both pages (read from 
+  Firebase).
+- Since there's no backend server, all logic (deduction, status changes, 
+  reminder checks) runs client-side in JavaScript, directly reading/writing 
+  Firebase.
+- Provide clear setup instructions for creating a free Firebase project, 
+  enabling Realtime Database, and adding the Firebase config keys into 
+  the code.
+- Keep it fully static/frontend-only otherwise — no Node/Express server 
+  required.
+
+Please scaffold this as a complete working project with two HTML pages 
+(shop1.html, shop2.html), Firebase Realtime Database integration, working 
+Tamil voice alerts, and clear instructions on where to plug in Firebase 
+config.

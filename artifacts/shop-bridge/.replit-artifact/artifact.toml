@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Shop Bridge"
+description = "A two-shop order, inventory, and alert dashboard for a local business, with live order handoff, Tamil voice notifications, stock tracking, and restock history."
+version = "1.0.0"
+id = "artifacts/shop-bridge"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24051
+
+[services.development]
+run = "pnpm --filter @workspace/shop-bridge run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/shop-bridge", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/shop-bridge/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24051"
+BASE_PATH = "/"
