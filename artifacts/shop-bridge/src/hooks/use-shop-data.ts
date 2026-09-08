@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   encodeKey,
+  ensureLiveAccess,
   firebaseConfigured,
   adjustInventory,
   deductInventory,
@@ -84,15 +85,28 @@ export function useShopData(businessId: string) {
 
   useEffect(() => {
     if (firebaseConfigured) {
-      return watchLiveBridge(businessId, (next) => {
-        setSnapshot(next);
+      let active = true;
+      let stopWatching: (() => void) | undefined;
+      void ensureLiveAccess().then(() => {
+        if (!active) return;
+        stopWatching = watchLiveBridge(businessId, (next) => {
+          setSnapshot(next);
+          setLoading(false);
+          setError(null);
+          setLastUpdated(Date.now());
+        }, () => {
+          setLoading(false);
+          setError("Firebase could not be reached. Check the database URL, Anonymous sign-in, and security rules.");
+        });
+      }).catch(() => {
+        if (!active) return;
         setLoading(false);
-        setError(null);
-        setLastUpdated(Date.now());
-      }, () => {
-        setLoading(false);
-        setError("Firebase could not be reached. Check the database URL and security rules.");
+        setError("Firebase access needs Anonymous sign-in enabled in Authentication before the shared lane can load.");
       });
+      return () => {
+        active = false;
+        stopWatching?.();
+      };
     }
     const refresh = () => {
       setSnapshot(readDemo(businessId));

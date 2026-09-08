@@ -1,0 +1,35 @@
+{
+  "rules": {
+    "shopBridge": {
+      "businesses": {
+        "$businessId": {
+          ".read": "auth != null",
+          "orders": {
+            "$orderId": {
+              ".write": "auth != null && newData.exists() && newData.child('id').val() == $orderId",
+              ".validate": "newData.hasChildren(['id', 'itemName', 'quantity', 'status', 'timeRequested', 'reminderNeeded']) && newData.child('id').isString() && newData.child('id').val() == $orderId && newData.child('itemName').isString() && newData.child('itemName').val().length > 0 && newData.child('itemName').val().length <= 80 && newData.child('quantity').isNumber() && newData.child('quantity').val() >= 1 && newData.child('quantity').val() <= 99 && newData.child('quantity').val() % 1 == 0 && newData.child('timeRequested').isNumber() && newData.child('reminderNeeded').isBoolean() && (!newData.child('timeConfirmed').exists() || newData.child('timeConfirmed').isNumber()) && (!newData.child('timeAcknowledged').exists() || newData.child('timeAcknowledged').isNumber()) && ((!data.exists() && newData.child('status').val() == 'pending' && !newData.child('timeConfirmed').exists() && !newData.child('timeAcknowledged').exists() && newData.child('reminderNeeded').val() == false) || (data.exists() && newData.child('itemName').val() == data.child('itemName').val() && newData.child('quantity').val() == data.child('quantity').val() && newData.child('timeRequested').val() == data.child('timeRequested').val() && data.child('status').val() == 'pending' && newData.child('status').val() == 'pending' && !newData.child('timeConfirmed').exists() && !newData.child('timeAcknowledged').exists() && newData.child('reminderNeeded').val() == false) || (data.exists() && newData.child('itemName').val() == data.child('itemName').val() && newData.child('quantity').val() == data.child('quantity').val() && newData.child('timeRequested').val() == data.child('timeRequested').val() && data.child('status').val() == 'pending' && newData.child('status').val() == 'confirmed' && newData.child('timeConfirmed').isNumber() && newData.child('timeConfirmed').val() >= data.child('timeRequested').val() && !newData.child('timeAcknowledged').exists() && newData.child('reminderNeeded').val() == false) || (data.exists() && newData.child('itemName').val() == data.child('itemName').val() && newData.child('quantity').val() == data.child('quantity').val() && newData.child('timeRequested').val() == data.child('timeRequested').val() && data.child('status').val() == 'confirmed' && newData.child('status').val() == 'confirmed' && newData.child('timeConfirmed').val() == data.child('timeConfirmed').val() && !newData.child('timeAcknowledged').exists()) || (data.exists() && newData.child('itemName').val() == data.child('itemName').val() && newData.child('quantity').val() == data.child('quantity').val() && newData.child('timeRequested').val() == data.child('timeRequested').val() && data.child('status').val() == 'confirmed' && newData.child('status').val() == 'completed' && newData.child('timeConfirmed').val() == data.child('timeConfirmed').val() && newData.child('timeAcknowledged').isNumber() && newData.child('timeAcknowledged').val() >= newData.child('timeConfirmed').val()) || (data.exists() && newData.child('itemName').val() == data.child('itemName').val() && newData.child('quantity').val() == data.child('quantity').val() && newData.child('timeRequested').val() == data.child('timeRequested').val() && data.child('status').val() == 'completed' && newData.child('status').val() == 'completed' && newData.child('timeConfirmed').val() == data.child('timeConfirmed').val() && newData.child('timeAcknowledged').val() == data.child('timeAcknowledged').val()))"
+            }
+          },
+          "inventory": {
+            "$itemKey": {
+              ".write": "auth != null && newData.exists()",
+              ".validate": "newData.hasChildren(['itemName', 'currentStock', 'lowStockThreshold', 'lastRestockedTime']) && newData.child('itemName').isString() && newData.child('itemName').val().length > 0 && newData.child('itemName').val().length <= 80 && newData.child('currentStock').isNumber() && newData.child('currentStock').val() >= 0 && newData.child('currentStock').val() <= 999 && newData.child('currentStock').val() % 1 == 0 && newData.child('lowStockThreshold').isNumber() && newData.child('lowStockThreshold').val() >= 0 && newData.child('lowStockThreshold').val() <= 999 && newData.child('lowStockThreshold').val() % 1 == 0 && newData.child('lastRestockedTime').isNumber()"
+            }
+          },
+          "restocks": {
+            "$restockId": {
+              ".write": "auth != null && newData.exists()",
+              ".validate": "newData.hasChildren(['itemName', 'restockedQuantity', 'timestamp']) && newData.child('itemName').isString() && newData.child('itemName').val().length > 0 && newData.child('itemName').val().length <= 80 && newData.child('restockedQuantity').isNumber() && newData.child('restockedQuantity').val() >= 1 && newData.child('restockedQuantity').val() <= 99 && newData.child('restockedQuantity').val() % 1 == 0 && newData.child('timestamp').isNumber()"
+            }
+          },
+          "presence": {
+            "$role": {
+              ".write": "auth != null && ($role == 'shop1' || $role == 'shop2')",
+              ".validate": "newData.hasChildren(['role', 'username', 'lastSeen']) && newData.child('role').val() == $role && newData.child('username').isString() && newData.child('username').val().length > 0 && newData.child('username').val().length <= 80 && newData.child('lastSeen').isNumber()"
+            }
+          }
+        }
+      }
+    }
+  }
+}

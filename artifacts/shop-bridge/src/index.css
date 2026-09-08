@@ -608,12 +608,18 @@ select:focus, input:focus { border-color: var(--coral); box-shadow: 0 0 0 3px hs
 .code-chip { background: hsl(166 27% 17% / .06); border: 1px solid var(--line); color: var(--ink); display: inline-block; padding: 10px 12px; border-radius: 6px; font: 10px var(--app-font-mono); }
 .env-block { position: relative; background: var(--ink); color: hsl(42 38% 89%); border-radius: 8px; padding: 16px; overflow: hidden; }
 .env-block pre { font: 10px/1.8 var(--app-font-mono); margin: 0; white-space: pre-wrap; }
+.rules-block { max-height: 390px; overflow: auto; }
+.rules-block pre { padding-right: 74px; white-space: pre; }
 .copy-button { position: absolute; top: 11px; right: 11px; border: 1px solid hsl(42 38% 94% / .25); color: var(--paper); background: hsl(42 38% 94% / .08); border-radius: 5px; padding: 7px 9px; font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 .demo-callout { display: flex; align-items: center; gap: 13px; border: 1px solid hsl(42 68% 64% / .6); background: hsl(42 68% 64% / .16); padding: 17px; border-radius: 9px; margin-top: 18px; }
+.live-callout { border-color: hsl(126 20% 44% / .35); background: hsl(126 20% 44% / .1); }
 .demo-callout-icon { color: var(--coral); }
 .demo-callout > div:nth-child(2) { flex: 1; }
 .demo-callout strong { font-size: 12px; }
 .demo-callout p { color: var(--ink-soft); font-size: 11px; line-height: 1.45; margin: 4px 0 0; }
+.verification-list { display: grid; gap: 8px; color: var(--ink-soft); font-size: 11px; }
+.verification-list span { display: flex; align-items: center; gap: 8px; }
+.verification-list svg { color: var(--sage); flex: 0 0 auto; }
 .modal-scrim { position: fixed; z-index: 50; inset: 0; background: hsl(166 27% 17% / .55); display: grid; place-items: center; padding: 18px; animation: fade-in .2s both; }
 .modal { position: relative; width: min(100%, 410px); background: var(--paper-bright); border-radius: 13px; border: 1px solid var(--line); padding: 27px; box-shadow: 0 20px 55px hsl(166 27% 17% / .2); animation: rise-in .25s both; }
 .modal h2 { font: 700 25px var(--app-font-serif); letter-spacing: -.045em; margin: 0 0 8px; }

@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import { useShopData } from "@/hooks/use-shop-data";
 import { useTamilAlerts } from "@/hooks/use-tamil-alerts";
-import { firebaseConfigured, registerPresence, watchPresence, type InventoryItem, type Order, type OrderStatus, type ShopRole } from "@/lib/firebase";
+import databaseRules from "@/lib/firebase.database.rules.json";
+import { ensureLiveAccess, firebaseConfigured, registerPresence, watchPresence, type InventoryItem, type Order, type OrderStatus, type ShopRole } from "@/lib/firebase";
 
 type ShopSession = {
   username: string;
@@ -57,11 +58,20 @@ function useShopPresence(session: ShopSession) {
       setPartnerOnline(false);
       return;
     }
-    void registerPresence(session.businessId, { role: session.role, username: session.username, lastSeen: Date.now() }).catch(() => undefined);
-    return watchPresence(session.businessId, (presence) => {
-      const partner = session.role === "shop1" ? "shop2" : "shop1";
-      setPartnerOnline(Boolean(presence[partner]));
-    });
+    let active = true;
+    let stopWatching: (() => void) | undefined;
+    void ensureLiveAccess().then(() => {
+      if (!active) return;
+      void registerPresence(session.businessId, { role: session.role, username: session.username, lastSeen: Date.now() }).catch(() => undefined);
+      stopWatching = watchPresence(session.businessId, (presence) => {
+        const partner = session.role === "shop1" ? "shop2" : "shop1";
+        setPartnerOnline(Boolean(presence[partner]));
+      });
+    }).catch(() => setPartnerOnline(false));
+    return () => {
+      active = false;
+      stopWatching?.();
+    };
   }, [session.businessId, session.role, session.username]);
   return partnerOnline;
 }
@@ -94,7 +104,7 @@ function relativeTime(timestamp: number) {
 function AppShell({ children, session, onLogout }: { children: ReactNode; session: ShopSession; onLogout: () => void }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isDemo = !import.meta.env.VITE_FIREBASE_API_KEY;
+  const isDemo = !firebaseConfigured;
   const partnerOnline = useShopPresence(session);
   const partnerLabel = session.role === "shop1" ? "Shop 2" : "Shop 1";
 
@@ -376,13 +386,30 @@ function ShopTwo({ session, onLogout }: { session: ShopSession; onLogout: () => 
 
 function Setup({ session, onLogout }: { session: ShopSession; onLogout: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [rulesCopied, setRulesCopied] = useState(false);
   const envText = `VITE_FIREBASE_API_KEY=\\nVITE_FIREBASE_AUTH_DOMAIN=\\nVITE_FIREBASE_DATABASE_URL=\\nVITE_FIREBASE_PROJECT_ID=\\nVITE_FIREBASE_STORAGE_BUCKET=\\nVITE_FIREBASE_MESSAGING_SENDER_ID=\\nVITE_FIREBASE_APP_ID=`;
+  const rulesText = JSON.stringify(databaseRules, null, 2);
   async function copy() {
     await navigator.clipboard?.writeText(envText);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
-  return <AppShell session={session} onLogout={onLogout}><div className="setup-page"><div className="setup-hero"><div className="setup-mark"><Database size={26} /></div><p className="eyebrow">Connection setup</p><h1>One shared source of truth.</h1><p>Steepbridge uses Firebase Realtime Database so both shops see the same request the moment it is made. No refresh, no radioing across the lane.</p></div><div className="setup-grid"><section className="panel setup-card"><div className="step-number">01</div><h2>Create a Firebase project</h2><p>In the Firebase console, create a project and add a Web app. The app uses a simple business ID sign-in, so no external authentication service is required for this workflow.</p><a className="text-link" href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" data-testid="link-firebase-console">Open Firebase Console <ArrowRight size={14} /></a></section><section className="panel setup-card"><div className="step-number">02</div><h2>Turn on Realtime Database</h2><p>Create a Realtime Database in the region closest to your shops. For a private deployment, add your own security rules before sharing the URL.</p><div className="code-chip">businesses / your-business-id / orders · inventory · restocks</div></section><section className="panel setup-card setup-wide"><div className="step-number">03</div><h2>Paste the web config into <span className="mono">.env</span></h2><p>Copy these keys into <span className="mono">artifacts/shop-bridge/.env</span>, then restart the dev server. The app detects the config on startup.</p><div className="env-block"><pre>{envText}</pre><button className="copy-button" onClick={copy} data-testid="button-copy-env">{copied ? <><Check size={14} /> Copied</> : "Copy keys"}</button></div></section></div><div className="demo-callout"><div className="demo-callout-icon"><Signal size={19} /></div><div><strong>Business ID pairing</strong><p>Both devices must sign in with the same business ID. A different business ID opens a separate workspace and cannot see the other shop.</p></div><Link href="/shop1" className="button button-secondary" data-testid="link-return-demo">Return to workspace</Link></div></div></AppShell>;
+  async function copyRules() {
+    await navigator.clipboard?.writeText(rulesText);
+    setRulesCopied(true);
+    window.setTimeout(() => setRulesCopied(false), 1800);
+  }
+  return <AppShell session={session} onLogout={onLogout}><div className="setup-page">
+    <div className="setup-hero"><div className="setup-mark"><Database size={26} /></div><p className="eyebrow">Connection setup</p><h1>One shared source of truth.</h1><p>Steepbridge uses Firebase Realtime Database so both shops see the same request the moment it is made. No refresh, no radioing across the lane.</p></div>
+    <div className="setup-grid">
+      <section className="panel setup-card"><div className="step-number">01</div><h2>Create a Firebase project</h2><p>In the Firebase console, create a project and add a Web app. Then open Authentication → Sign-in method and enable <strong>Anonymous</strong>. The app signs each browser into a temporary Firebase account before it reads or writes the shared lane. Your business ID still selects which workspace the two shops use.</p><a className="text-link" href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" data-testid="link-firebase-console">Open Firebase Console <ArrowRight size={14} /></a></section>
+      <section className="panel setup-card"><div className="step-number">02</div><h2>Turn on Realtime Database</h2><p>Create a Realtime Database in the region closest to your shops. The private rules below require a signed-in Firebase session, allow both shops to read their business lane, and validate only order, inventory, restock, and presence data.</p><div className="code-chip">businesses / your-business-id / orders · inventory · restocks</div></section>
+      <section className="panel setup-card setup-wide"><div className="step-number">03</div><h2>Apply the private database rules</h2><p>In Realtime Database → Rules, replace the default rules with this policy and publish. It blocks unauthenticated reads and writes, prevents deleting records, keeps order details immutable, and only permits pending → confirmed → completed handoffs. Anonymous authentication protects the database from public traffic, but the business ID is not a second security boundary—only share the URL with the two shop teams.</p><div className="env-block rules-block"><pre>{rulesText}</pre><button className="copy-button" onClick={copyRules} data-testid="button-copy-rules">{rulesCopied ? <><Check size={14} /> Copied</> : "Copy rules"}</button></div></section>
+      <section className="panel setup-card setup-wide"><div className="step-number">04</div><h2>Paste the web config into <span className="mono">.env</span></h2><p>Copy these keys into <span className="mono">artifacts/shop-bridge/.env</span>, then restart the dev server. The app detects the config on startup and signs the browser in anonymously before opening the business-scoped listener.</p><div className="env-block"><pre>{envText}</pre><button className="copy-button" onClick={copy} data-testid="button-copy-env">{copied ? <><Check size={14} /> Copied</> : "Copy keys"}</button></div></section>
+      <section className="panel setup-card setup-wide"><div className="step-number">05</div><h2>Verify the live lane on two devices</h2><p>Open the same URL in two separate browsers or devices. Sign in with the same business ID, choose Shop 1 on one and Shop 2 on the other, then run this handoff: send a request → confirm it → acknowledge delivery. Each status should appear on the other device without a refresh. If either device shows an access error, check that Anonymous sign-in is enabled and the rules are published.</p><div className="verification-list"><span><Check size={14} /> Shop 1 request appears in Shop 2</span><span><Check size={14} /> Confirmation appears in Shop 1</span><span><Check size={14} /> Delivery acknowledgement completes both views</span></div></section>
+    </div>
+    <div className={`demo-callout ${firebaseConfigured ? "live-callout" : ""}`}><div className="demo-callout-icon"><Signal size={19} /></div><div>{firebaseConfigured ? <><strong>Live configuration detected</strong><p>Anonymous sign-in will run automatically after the business ID is entered. Use the two-device checklist above before sharing the URL.</p></> : <><strong>Working in demo mode right now</strong><p>Requests and inventory changes are stored locally for the selected business ID. Connect Firebase, enable Anonymous sign-in, and publish the rules when both shop teams are ready to share a live lane.</p></>}</div><Link href="/shop1" className="button button-secondary" data-testid="link-return-demo">{firebaseConfigured ? "Open live workspace" : "Return to workspace"}</Link></div>
+  </div></AppShell>;
 }
 
 function LoginPage({ onLogin }: { onLogin: (session: ShopSession) => void }) {

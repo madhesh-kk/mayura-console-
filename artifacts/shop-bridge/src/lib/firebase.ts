@@ -1,4 +1,5 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import { getAuth, onAuthStateChanged, signInAnonymously, type Auth } from "firebase/auth";
 import { getDatabase, onDisconnect, onValue, push, ref, runTransaction, set, update, type Database } from "firebase/database";
 
 export type OrderStatus = "pending" | "confirmed" | "completed";
@@ -55,11 +56,33 @@ export const firebaseConfigured = Boolean(
 );
 
 let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
 let database: Database | undefined;
 
 if (firebaseConfigured) {
   app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  auth = getAuth(app);
   database = getDatabase(app);
+}
+
+let authReady: Promise<void> | undefined;
+if (auth) {
+  authReady = new Promise<void>((resolve, reject) => {
+    const stopListening = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        stopListening();
+        resolve();
+        return;
+      }
+      void signInAnonymously(auth).catch((error: unknown) => {
+        stopListening();
+        reject(error);
+      });
+    }, (error) => {
+      stopListening();
+      reject(error);
+    });
+  });
 }
 
 export const bridgeDatabase = database;
@@ -82,18 +105,25 @@ export function watchLiveBridge(businessId: string, onSnapshot: (snapshot: Bridg
   return stop;
 }
 
+export async function ensureLiveAccess() {
+  await authReady;
+}
+
 export async function writeOrder(businessId: string, order: Order) {
   if (!database) return;
+  await ensureLiveAccess();
   await set(ref(database, `${businessPath(businessId)}/orders/${order.id}`), order);
 }
 
 export async function patchOrder(businessId: string, id: string, patch: Partial<Order>) {
   if (!database) return;
+  await ensureLiveAccess();
   await update(ref(database, `${businessPath(businessId)}/orders/${id}`), patch);
 }
 
 export async function deductInventory(businessId: string, itemName: string, quantity: number) {
   if (!database) return false;
+  await ensureLiveAccess();
   const result = await runTransaction(ref(database, `${businessPath(businessId)}/inventory/${encodeKey(itemName)}`), (item) => {
     if (!item) return item;
     const available = Number(item.currentStock ?? 0);
@@ -105,6 +135,7 @@ export async function deductInventory(businessId: string, itemName: string, quan
 
 export async function adjustInventory(businessId: string, itemName: string, delta: number) {
   if (!database) return false;
+  await ensureLiveAccess();
   const result = await runTransaction(ref(database, `${businessPath(businessId)}/inventory/${encodeKey(itemName)}`), (item) => {
     if (!item) return item;
     return {
@@ -118,17 +149,20 @@ export async function adjustInventory(businessId: string, itemName: string, delt
 
 export async function writeInventory(businessId: string, item: InventoryItem) {
   if (!database) return;
+  await ensureLiveAccess();
   await set(ref(database, `${businessPath(businessId)}/inventory/${encodeKey(item.itemName)}`), item);
 }
 
 export async function writeRestock(businessId: string, restock: RestockHistory) {
   if (!database) return;
+  await ensureLiveAccess();
   const restockRef = push(ref(database, `${businessPath(businessId)}/restocks`));
   await set(restockRef, restock);
 }
 
 export async function registerPresence(businessId: string, presence: ShopPresence) {
   if (!database) return;
+  await ensureLiveAccess();
   const presenceRef = ref(database, `${businessPath(businessId)}/presence/${presence.role}`);
   await set(presenceRef, presence);
   await onDisconnect(presenceRef).remove();

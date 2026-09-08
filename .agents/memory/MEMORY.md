@@ -1,0 +1,1 @@
+- [Firebase access model](firebase-access-model.md) — anonymous auth protects the shared lane from unauthenticated traffic but does not separate Shop 1 and Shop 2 roles.
