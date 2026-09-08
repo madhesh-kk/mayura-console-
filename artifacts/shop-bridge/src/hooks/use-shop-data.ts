@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   encodeKey,
   firebaseConfigured,
+  adjustInventory,
   deductInventory,
   patchOrder,
   type BridgeSnapshot,
@@ -61,29 +62,29 @@ const seed: BridgeSnapshot = {
   ],
 };
 
-function readDemo(): BridgeSnapshot {
+function readDemo(businessId: string): BridgeSnapshot {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(`${STORAGE_KEY}:${encodeKey(businessId)}`);
     return stored ? JSON.parse(stored) : seed;
   } catch {
     return seed;
   }
 }
 
-function saveDemo(snapshot: BridgeSnapshot) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+function saveDemo(businessId: string, snapshot: BridgeSnapshot) {
+  localStorage.setItem(`${STORAGE_KEY}:${encodeKey(businessId)}`, JSON.stringify(snapshot));
   window.dispatchEvent(new CustomEvent("shop-bridge-demo-update"));
 }
 
-export function useShopData() {
-  const [snapshot, setSnapshot] = useState<BridgeSnapshot>(() => (firebaseConfigured ? { orders: [], inventory: [], restocks: [] } : readDemo()));
+export function useShopData(businessId: string) {
+  const [snapshot, setSnapshot] = useState<BridgeSnapshot>(() => (firebaseConfigured ? { orders: [], inventory: [], restocks: [] } : readDemo(businessId)));
   const [loading, setLoading] = useState(firebaseConfigured);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState(Date.now());
 
   useEffect(() => {
     if (firebaseConfigured) {
-      return watchLiveBridge((next) => {
+      return watchLiveBridge(businessId, (next) => {
         setSnapshot(next);
         setLoading(false);
         setError(null);
@@ -94,7 +95,7 @@ export function useShopData() {
       });
     }
     const refresh = () => {
-      setSnapshot(readDemo());
+      setSnapshot(readDemo(businessId));
       setLastUpdated(Date.now());
     };
     window.addEventListener("shop-bridge-demo-update", refresh);
@@ -103,15 +104,15 @@ export function useShopData() {
       window.removeEventListener("shop-bridge-demo-update", refresh);
       window.removeEventListener("storage", refresh);
     };
-  }, []);
+  }, [businessId]);
 
   const mutateDemo = useCallback((change: (current: BridgeSnapshot) => BridgeSnapshot) => {
     if (firebaseConfigured) return;
-    const next = change(readDemo());
-    saveDemo(next);
+    const next = change(readDemo(businessId));
+    saveDemo(businessId, next);
     setSnapshot(next);
     setLastUpdated(Date.now());
-  }, []);
+  }, [businessId]);
 
   const createOrder = useCallback(async (itemName: string, quantity: number) => {
     const order: Order = {
@@ -122,10 +123,10 @@ export function useShopData() {
       timeRequested: Date.now(),
       reminderNeeded: false,
     };
-    if (firebaseConfigured) await writeOrder(order);
+    if (firebaseConfigured) await writeOrder(businessId, order);
     else mutateDemo((current) => ({ ...current, orders: [order, ...current.orders] }));
     return order;
-  }, [mutateDemo]);
+  }, [businessId, mutateDemo]);
 
   const confirmOrder = useCallback(async (id: string) => {
     const order = snapshot.orders.find((candidate) => candidate.id === id);
@@ -136,9 +137,9 @@ export function useShopData() {
       if (!item || item.currentStock < order.quantity) {
         throw new Error(`Not enough ${order.itemName} in stock.`);
       }
-      const committed = await deductInventory(order.itemName, order.quantity);
+      const committed = await deductInventory(businessId, order.itemName, order.quantity);
       if (!committed) throw new Error(`Stock changed before ${order.itemName} could be confirmed.`);
-      await patchOrder(id, patch);
+      await patchOrder(businessId, id, patch);
     } else {
       mutateDemo((current) => ({
         ...current,
@@ -148,34 +149,47 @@ export function useShopData() {
           : entry),
       }));
     }
-  }, [mutateDemo, snapshot.inventory, snapshot.orders]);
+  }, [businessId, mutateDemo, snapshot.inventory, snapshot.orders]);
 
   const acknowledgeOrder = useCallback(async (id: string) => {
     const patch = { status: "completed" as const, timeAcknowledged: Date.now() };
-    if (firebaseConfigured) await patchOrder(id, patch);
+    if (firebaseConfigured) await patchOrder(businessId, id, patch);
     else mutateDemo((current) => ({ ...current, orders: current.orders.map((order) => order.id === id ? { ...order, ...patch } : order) }));
-  }, [mutateDemo]);
+  }, [businessId, mutateDemo]);
 
   const markReminderNeeded = useCallback(async (id: string) => {
     const order = snapshot.orders.find((candidate) => candidate.id === id);
     if (!order || order.status !== "confirmed" || order.reminderNeeded) return;
     const patch = { reminderNeeded: true };
-    if (firebaseConfigured) await patchOrder(id, patch);
+    if (firebaseConfigured) await patchOrder(businessId, id, patch);
     else mutateDemo((current) => ({ ...current, orders: current.orders.map((entry) => entry.id === id ? { ...entry, ...patch } : entry) }));
-  }, [mutateDemo, snapshot.orders]);
+  }, [businessId, mutateDemo, snapshot.orders]);
 
   const saveInventoryItem = useCallback(async (item: InventoryItem) => {
-    if (firebaseConfigured) await writeInventory(item);
+    if (firebaseConfigured) await writeInventory(businessId, item);
     else mutateDemo((current) => ({ ...current, inventory: current.inventory.some((entry) => entry.itemName === item.itemName) ? current.inventory.map((entry) => entry.itemName === item.itemName ? item : entry) : [item, ...current.inventory] }));
-  }, [mutateDemo]);
+  }, [businessId, mutateDemo]);
+
+  const changeInventory = useCallback(async (itemName: string, delta: number) => {
+    if (firebaseConfigured) {
+      await adjustInventory(businessId, itemName, delta);
+      return;
+    }
+    mutateDemo((current) => ({
+      ...current,
+      inventory: current.inventory.map((item) => item.itemName === itemName
+        ? { ...item, currentStock: Math.max(0, item.currentStock + delta), lastRestockedTime: delta > 0 ? Date.now() : item.lastRestockedTime }
+        : item),
+    }));
+  }, [businessId, mutateDemo]);
 
   const restock = useCallback(async (itemName: string, quantity: number) => {
     const now = Date.now();
     const entry: RestockHistory = { itemName, restockedQuantity: quantity, timestamp: now };
     if (firebaseConfigured) {
       const item = snapshot.inventory.find((candidate) => candidate.itemName === itemName);
-      if (item) await writeInventory({ ...item, currentStock: item.currentStock + quantity, lastRestockedTime: now });
-      await writeRestock(entry);
+      if (item) await adjustInventory(businessId, itemName, quantity);
+      await writeRestock(businessId, entry);
     } else {
       mutateDemo((current) => ({
         ...current,
@@ -183,7 +197,7 @@ export function useShopData() {
         restocks: [entry, ...current.restocks],
       }));
     }
-  }, [mutateDemo, snapshot.inventory]);
+  }, [businessId, mutateDemo, snapshot.inventory]);
 
   const sortedOrders = useMemo(() => [...snapshot.orders].sort((a, b) => b.timeRequested - a.timeRequested), [snapshot.orders]);
   const lowStock = useMemo(() => snapshot.inventory.filter((item) => item.currentStock < item.lowStockThreshold), [snapshot.inventory]);
@@ -201,9 +215,10 @@ export function useShopData() {
     acknowledgeOrder,
     markReminderNeeded,
     saveInventoryItem,
+    changeInventory,
     restock,
     resetDemo: () => {
-      if (!firebaseConfigured) saveDemo(seed);
+      if (!firebaseConfigured) saveDemo(businessId, seed);
     },
     encodeKey,
   };

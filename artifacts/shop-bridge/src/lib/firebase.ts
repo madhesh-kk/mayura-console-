@@ -1,7 +1,8 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { getDatabase, onValue, push, ref, runTransaction, set, update, type Database } from "firebase/database";
+import { getDatabase, onDisconnect, onValue, push, ref, runTransaction, set, update, type Database } from "firebase/database";
 
 export type OrderStatus = "pending" | "confirmed" | "completed";
+export type ShopRole = "shop1" | "shop2";
 
 export type Order = {
   id: string;
@@ -33,6 +34,12 @@ export type BridgeSnapshot = {
   restocks: RestockHistory[];
 };
 
+export type ShopPresence = {
+  role: ShopRole;
+  username: string;
+  lastSeen: number;
+};
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -56,12 +63,14 @@ if (firebaseConfigured) {
 }
 
 export const bridgeDatabase = database;
-export const bridgeRoot = database ? ref(database, "shopBridge") : null;
+function businessPath(businessId: string) {
+  return `shopBridge/businesses/${encodeKey(businessId)}`;
+}
 
-export function watchLiveBridge(onSnapshot: (snapshot: BridgeSnapshot) => void, onError?: (error: Error) => void) {
-  if (!bridgeRoot) return () => undefined;
+export function watchLiveBridge(businessId: string, onSnapshot: (snapshot: BridgeSnapshot) => void, onError?: (error: Error) => void) {
+  if (!database) return () => undefined;
   let current: BridgeSnapshot = { orders: [], inventory: [], restocks: [] };
-  const stop = onValue(bridgeRoot, (value) => {
+  const stop = onValue(ref(database, businessPath(businessId)), (value) => {
     const data = value.val() ?? {};
     current = {
       orders: Object.values(data.orders ?? {}) as Order[],
@@ -73,19 +82,19 @@ export function watchLiveBridge(onSnapshot: (snapshot: BridgeSnapshot) => void, 
   return stop;
 }
 
-export async function writeOrder(order: Order) {
+export async function writeOrder(businessId: string, order: Order) {
   if (!database) return;
-  await set(ref(database, `shopBridge/orders/${order.id}`), order);
+  await set(ref(database, `${businessPath(businessId)}/orders/${order.id}`), order);
 }
 
-export async function patchOrder(id: string, patch: Partial<Order>) {
+export async function patchOrder(businessId: string, id: string, patch: Partial<Order>) {
   if (!database) return;
-  await update(ref(database, `shopBridge/orders/${id}`), patch);
+  await update(ref(database, `${businessPath(businessId)}/orders/${id}`), patch);
 }
 
-export async function deductInventory(itemName: string, quantity: number) {
+export async function deductInventory(businessId: string, itemName: string, quantity: number) {
   if (!database) return false;
-  const result = await runTransaction(ref(database, `shopBridge/inventory/${encodeKey(itemName)}`), (item) => {
+  const result = await runTransaction(ref(database, `${businessPath(businessId)}/inventory/${encodeKey(itemName)}`), (item) => {
     if (!item) return item;
     const available = Number(item.currentStock ?? 0);
     if (available < quantity) return;
@@ -94,15 +103,42 @@ export async function deductInventory(itemName: string, quantity: number) {
   return result.committed;
 }
 
-export async function writeInventory(item: InventoryItem) {
-  if (!database) return;
-  await set(ref(database, `shopBridge/inventory/${encodeKey(item.itemName)}`), item);
+export async function adjustInventory(businessId: string, itemName: string, delta: number) {
+  if (!database) return false;
+  const result = await runTransaction(ref(database, `${businessPath(businessId)}/inventory/${encodeKey(itemName)}`), (item) => {
+    if (!item) return item;
+    return {
+      ...item,
+      currentStock: Math.max(0, Number(item.currentStock ?? 0) + delta),
+      lastRestockedTime: delta > 0 ? Date.now() : item.lastRestockedTime,
+    };
+  });
+  return result.committed;
 }
 
-export async function writeRestock(restock: RestockHistory) {
+export async function writeInventory(businessId: string, item: InventoryItem) {
   if (!database) return;
-  const restockRef = push(ref(database, "shopBridge/restocks"));
+  await set(ref(database, `${businessPath(businessId)}/inventory/${encodeKey(item.itemName)}`), item);
+}
+
+export async function writeRestock(businessId: string, restock: RestockHistory) {
+  if (!database) return;
+  const restockRef = push(ref(database, `${businessPath(businessId)}/restocks`));
   await set(restockRef, restock);
+}
+
+export async function registerPresence(businessId: string, presence: ShopPresence) {
+  if (!database) return;
+  const presenceRef = ref(database, `${businessPath(businessId)}/presence/${presence.role}`);
+  await set(presenceRef, presence);
+  await onDisconnect(presenceRef).remove();
+}
+
+export function watchPresence(businessId: string, onSnapshot: (presence: Record<string, ShopPresence>) => void) {
+  if (!database) return () => undefined;
+  return onValue(ref(database, `${businessPath(businessId)}/presence`), (value) => {
+    onSnapshot((value.val() ?? {}) as Record<string, ShopPresence>);
+  });
 }
 
 export function encodeKey(value: string) {

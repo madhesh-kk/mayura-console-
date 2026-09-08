@@ -11,6 +11,7 @@ import {
   Database,
   FileClock,
   Leaf,
+  LogOut,
   Menu,
   PackageCheck,
   Plus,
@@ -18,12 +19,52 @@ import {
   Settings2,
   ShoppingBasket,
   Signal,
+  UserRound,
   Truck,
   X,
 } from "lucide-react";
 import { useShopData } from "@/hooks/use-shop-data";
 import { useTamilAlerts } from "@/hooks/use-tamil-alerts";
-import type { InventoryItem, Order, OrderStatus } from "@/lib/firebase";
+import { firebaseConfigured, registerPresence, watchPresence, type InventoryItem, type Order, type OrderStatus, type ShopRole } from "@/lib/firebase";
+
+type ShopSession = {
+  username: string;
+  businessId: string;
+  role: ShopRole;
+};
+
+const SESSION_KEY = "shop-bridge-session";
+
+function readSession(): ShopSession | null {
+  try {
+    const value = localStorage.getItem(SESSION_KEY);
+    if (!value) return null;
+    const session = JSON.parse(value) as ShopSession;
+    return session.username && session.businessId && (session.role === "shop1" || session.role === "shop2") ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function initials(username: string) {
+  return username.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "SH";
+}
+
+function useShopPresence(session: ShopSession) {
+  const [partnerOnline, setPartnerOnline] = useState(false);
+  useEffect(() => {
+    if (!firebaseConfigured) {
+      setPartnerOnline(false);
+      return;
+    }
+    void registerPresence(session.businessId, { role: session.role, username: session.username, lastSeen: Date.now() }).catch(() => undefined);
+    return watchPresence(session.businessId, (presence) => {
+      const partner = session.role === "shop1" ? "shop2" : "shop1";
+      setPartnerOnline(Boolean(presence[partner]));
+    });
+  }, [session.businessId, session.role, session.username]);
+  return partnerOnline;
+}
 
 const navItems = [
   { href: "/shop1", label: "Shop 1 · Send", icon: ShoppingBasket },
@@ -50,10 +91,12 @@ function relativeTime(timestamp: number) {
   return `${hours} hr${hours === 1 ? "" : "s"} ago`;
 }
 
-function AppShell({ children }: { children: ReactNode }) {
+function AppShell({ children, session, onLogout }: { children: ReactNode; session: ShopSession; onLogout: () => void }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isDemo = !import.meta.env.VITE_FIREBASE_API_KEY;
+  const partnerOnline = useShopPresence(session);
+  const partnerLabel = session.role === "shop1" ? "Shop 2" : "Shop 1";
 
   return (
     <div className="app-shell">
@@ -106,7 +149,7 @@ function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <button className="icon-button menu-trigger" aria-label="Open menu" data-testid="button-open-menu" onClick={() => setMobileOpen(true)}><Menu size={21} /></button>
           <div className="topbar-location"><span className="live-pulse" /> Shared handoff desk <span className="slash">/</span> {location === "/shop2" ? "Shop 2" : location === "/setup" ? "Setup" : "Shop 1"}</div>
-          <div className="topbar-right"><span className="topbar-date">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}</span><div className="avatar">AB</div></div>
+          <div className="topbar-right"><span className={`connection-pill ${partnerOnline ? "connection-online" : ""}`}><span className="context-dot" />{partnerOnline ? `${partnerLabel} connected` : `Waiting for ${partnerLabel}`}</span><span className="topbar-date">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}</span><div className="avatar">{initials(session.username)}</div><button className="logout-button" onClick={onLogout} aria-label="Log out" title="Log out"><LogOut size={16} /></button></div>
         </header>
         <main className="page-content">{children}</main>
       </div>
@@ -184,7 +227,7 @@ function SectionHeading({ eyebrow, title, count, children }: { eyebrow?: string;
   return <div className="section-heading">{<div>{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h2>{title} {count !== undefined && <span className="count">{count}</span>}</h2></div>}{children}</div>;
 }
 
-function InventoryMini({ items, readOnly = false }: { items: InventoryItem[]; readOnly?: boolean }) {
+function InventoryMini({ items, readOnly = false, editable = false, onAdjust }: { items: InventoryItem[]; readOnly?: boolean; editable?: boolean; onAdjust?: (itemName: string, delta: number) => void }) {
   return (
     <div className="inventory-list">
       {items.map((item) => {
@@ -192,7 +235,8 @@ function InventoryMini({ items, readOnly = false }: { items: InventoryItem[]; re
         return <div className="inventory-row" key={item.itemName} data-testid={`row-inventory-${item.itemName}`}>
           <div className="inventory-name"><span className={`inventory-mark ${low ? "inventory-mark-low" : ""}`} /><div><strong>{item.itemName}</strong><small>{low ? "Below threshold" : `Restocked ${relativeTime(item.lastRestockedTime)}`}</small></div></div>
           <div className="inventory-amount"><strong className={low ? "low-number" : ""}>{item.currentStock}</strong><span>cases</span></div>
-          {readOnly && <span className={`stock-state ${low ? "stock-low" : "stock-ok"}`}>{low ? "Low" : "Good"}</span>}
+           {editable && onAdjust && <div className="stock-adjusters"><button onClick={() => onAdjust(item.itemName, -1)} aria-label={`Decrease ${item.itemName} by one`} title="Use one case">−1</button><button onClick={() => onAdjust(item.itemName, 1)} aria-label={`Increase ${item.itemName} by one`} title="Add one case">+1</button></div>}
+           {readOnly && <span className={`stock-state ${low ? "stock-low" : "stock-ok"}`}>{low ? "Low" : "Good"}</span>}
         </div>;
       })}
     </div>
@@ -207,8 +251,8 @@ function HistoryList({ orders, restocks }: { orders: Order[]; restocks: { itemNa
   return <div className="history-list">{rows.map((row, index) => <div className="history-row" key={`${row.type}-${row.name}-${row.time}-${index}`} data-testid={`history-row-${index}`}><span className={`history-icon ${row.type === "Order" ? "history-order" : "history-restock"}`}>{row.type === "Order" ? <Truck size={15} /> : <Plus size={15} />}</span><div><strong>{row.name}</strong><small>{row.type} · {row.detail}</small></div><time>{formatDate(row.time)}</time></div>)}{rows.length === 0 && <div className="empty-state compact-empty"><FileClock size={25} /><p>No handoff history yet.</p></div>}</div>;
 }
 
-function ShopOne() {
-  const data = useShopData();
+function ShopOne({ session, onLogout }: { session: ShopSession; onLogout: () => void }) {
+  const data = useShopData(session.businessId);
   const [itemName, setItemName] = useState("Jasmine Green");
   const [quantity, setQuantity] = useState("2");
   const [sent, setSent] = useState(false);
@@ -243,7 +287,7 @@ function ShopOne() {
     window.setTimeout(() => setSent(false), 3500);
   }
 
-  return <AppShell><DemoBanner isDemo={data.isDemo} /><DataState loading={data.loading} error={data.error} />
+  return <AppShell session={session} onLogout={onLogout}><DemoBanner isDemo={data.isDemo} /><DataState loading={data.loading} error={data.error} />
     <PageIntro eyebrow="Shop 1 · Sending desk" title="Keep the shelf moving." description="Send a clear request to the neighboring team. You will see every handoff, from tap to arrival." />
     <div className="stats-strip">
       <StatChip icon={Bell} label="Open requests" value={`${pending.length}`} tone={pending.length ? "warm" : "neutral"} />
@@ -271,7 +315,7 @@ function ShopOne() {
      <div className="content-grid">
       <section className="panel"><SectionHeading eyebrow="The lane" title="Active handoffs" count={pending.length} /><div className="order-stack">{pending.length === 0 ? <div className="empty-state"><PackageCheck size={30} /><strong>All clear</strong><p>No open handoffs right now.</p></div> : pending.map((order) => <OrderCard key={order.id} order={order} accent={order.status === "confirmed"} action={order.status === "confirmed" ? () => data.acknowledgeOrder(order.id) : undefined} actionLabel={order.status === "confirmed" ? "Acknowledge delivery" : undefined} actionIcon={<Check size={17} />} />)}</div></section>
       <div className="side-stack">
-        <section className="panel"><SectionHeading eyebrow="Read only" title="Shop 2 shelf" /><InventoryMini items={data.inventory} readOnly /><p className="panel-footnote"><span className="tiny-dot" /> Inventory is managed by Shop 2</p></section>
+         <section className="panel"><SectionHeading eyebrow="Shared shelf" title="Stock controls" /><InventoryMini items={data.inventory} editable onAdjust={(itemName, delta) => void data.changeInventory(itemName, delta)} /><p className="panel-footnote"><span className="tiny-dot" /> Use −1 when one case leaves Shop 1</p></section>
         <section className="panel"><SectionHeading eyebrow="Recent movement" title="History" /><HistoryList orders={data.orders} restocks={data.restocks} /><Link href="/shop2" className="text-link" data-testid="link-open-history">Open receiving desk <ArrowRight size={14} /></Link></section>
       </div>
     </div>
@@ -291,8 +335,8 @@ function RestockModal({ item, onClose, onRestock }: { item: InventoryItem; onClo
   return <div className="modal-scrim" role="presentation"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="restock-title"><button className="modal-close icon-button" onClick={onClose} aria-label="Close restock dialog" data-testid="button-close-restock"><X size={19} /></button><p className="eyebrow">Inventory movement</p><h2 id="restock-title">Restock {item.itemName}</h2><p className="modal-copy">Add cases to the shared shelf count.</p><form onSubmit={submit}><label>Cases added<input type="number" min="1" max="99" value={amount} onChange={(event) => setAmount(event.target.value)} autoFocus data-testid="input-restock-quantity" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose} data-testid="button-cancel-restock">Cancel</button><button type="submit" className="button button-primary" disabled={saving} data-testid="button-save-restock">{saving ? "Saving…" : "Log restock"}</button></div></form></div></div>;
 }
 
-function ShopTwo() {
-  const data = useShopData();
+function ShopTwo({ session, onLogout }: { session: ShopSession; onLogout: () => void }) {
+  const data = useShopData(session.businessId);
   const [restockItem, setRestockItem] = useState<InventoryItem | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [threshold, setThreshold] = useState("");
@@ -310,7 +354,7 @@ function ShopTwo() {
     setEditing(null);
   }
 
-  return <AppShell><DemoBanner isDemo={data.isDemo} /><DataState loading={data.loading} error={data.error} />
+  return <AppShell session={session} onLogout={onLogout}><DemoBanner isDemo={data.isDemo} /><DataState loading={data.loading} error={data.error} />
      <PageIntro eyebrow="Shop 2 · Receiving desk" title="Keep the promise visible." description="Confirm what you can send, keep shelf counts honest, and leave the next shift a clean signal."><button className={`button ${alerts.enabled ? "button-secondary" : "button-primary"}`} onClick={alerts.enable} data-testid="button-enable-sound">{alerts.enabled ? "Sound alerts on" : "Enable sound alerts"}</button></PageIntro>
     <div className="stats-strip">
       <StatChip icon={Bell} label="Needs your eye" value={`${pending.length}`} tone={pending.length ? "warm" : "neutral"} />
@@ -324,13 +368,13 @@ function ShopTwo() {
         <section className="panel"><SectionHeading eyebrow="Recently moved" title="Restock log" /><div className="restock-list">{data.restocks.slice(0, 4).map((entry, index) => <div className="restock-row" key={`${entry.itemName}-${entry.timestamp}-${index}`}><span className="restock-check"><Check size={13} /></span><div><strong>{entry.itemName}</strong><span>+{entry.restockedQuantity} cases</span></div><time>{relativeTime(entry.timestamp)}</time></div>)}</div><Link href="/shop1" className="text-link" data-testid="link-open-sender">View sending desk <ArrowRight size={14} /></Link></section>
       </div>
     </div>
-     <section className="panel inventory-panel"><SectionHeading eyebrow="Shared shelf" title="Inventory control" count={data.inventory.length}><span className="section-caption"><span className="tiny-dot" /> Thresholds save automatically</span></SectionHeading><div className="inventory-table"><div className="inventory-table-head"><span>Tea</span><span>On shelf</span><span>Low at</span><span>Last restocked</span><span /></div>{data.inventory.map((item) => { const low = item.currentStock < item.lowStockThreshold; return <div className={`inventory-table-row ${low ? "row-low" : ""}`} key={item.itemName} data-testid={`manage-inventory-${item.itemName}`}><div className="inventory-name"><span className={`inventory-mark ${low ? "inventory-mark-low" : ""}`} /><strong>{item.itemName}</strong></div><div className={`table-number ${low ? "low-number" : ""}`}>{item.currentStock} <small>cases</small></div>{editing === item.itemName ? <div className="threshold-edit"><input value={threshold} type="number" min="0" onChange={(event) => setThreshold(event.target.value)} data-testid={`input-threshold-${item.itemName}`} /><button onClick={() => saveThreshold(item)} className="confirm-edit" aria-label={`Save threshold for ${item.itemName}`} data-testid={`button-save-threshold-${item.itemName}`}><Check size={15} /></button></div> : <button className="threshold-button" onClick={() => startEdit(item)} data-testid={`button-edit-threshold-${item.itemName}`}>{item.lowStockThreshold} <small>cases</small><ChevronDown size={13} /></button>}<span className="last-restocked">{relativeTime(item.lastRestockedTime)}</span><button className="small-action restock-button" onClick={() => setRestockItem(item)} data-testid={`button-restock-${item.itemName}`}><Plus size={14} /> Restock</button></div>; })}</div></section>
+      <section className="panel inventory-panel"><SectionHeading eyebrow="Shared shelf" title="Inventory control" count={data.inventory.length}><span className="section-caption"><span className="tiny-dot" /> Both shops can adjust by one</span></SectionHeading><div className="inventory-table"><div className="inventory-table-head"><span>Tea</span><span>On shelf</span><span>Low at</span><span>Last restocked</span><span /></div>{data.inventory.map((item) => { const low = item.currentStock < item.lowStockThreshold; return <div className={`inventory-table-row ${low ? "row-low" : ""}`} key={item.itemName} data-testid={`manage-inventory-${item.itemName}`}><div className="inventory-name"><span className={`inventory-mark ${low ? "inventory-mark-low" : ""}`} /><strong>{item.itemName}</strong></div><div className="stock-control"><button onClick={() => void data.changeInventory(item.itemName, -1)} aria-label={`Decrease ${item.itemName} by one`}>−</button><div className={`table-number ${low ? "low-number" : ""}`}>{item.currentStock} <small>cases</small></div><button onClick={() => void data.changeInventory(item.itemName, 1)} aria-label={`Increase ${item.itemName} by one`}>+</button></div>{editing === item.itemName ? <div className="threshold-edit"><input value={threshold} type="number" min="0" onChange={(event) => setThreshold(event.target.value)} data-testid={`input-threshold-${item.itemName}`} /><button onClick={() => saveThreshold(item)} className="confirm-edit" aria-label={`Save threshold for ${item.itemName}`} data-testid={`button-save-threshold-${item.itemName}`}><Check size={15} /></button></div> : <button className="threshold-button" onClick={() => startEdit(item)} data-testid={`button-edit-threshold-${item.itemName}`}>{item.lowStockThreshold} <small>cases</small><ChevronDown size={13} /></button>}<span className="last-restocked">{relativeTime(item.lastRestockedTime)}</span><button className="small-action restock-button" onClick={() => setRestockItem(item)} data-testid={`button-restock-${item.itemName}`}><Plus size={14} /> Restock</button></div>; })}</div></section>
     <section className="panel history-panel"><SectionHeading eyebrow="Shared record" title="Order & restock history" /><HistoryList orders={data.orders} restocks={data.restocks} /></section>
     {restockItem && <RestockModal item={restockItem} onClose={() => setRestockItem(null)} onRestock={(amount) => data.restock(restockItem.itemName, amount)} />}
   </AppShell>;
 }
 
-function Setup() {
+function Setup({ session, onLogout }: { session: ShopSession; onLogout: () => void }) {
   const [copied, setCopied] = useState(false);
   const envText = `VITE_FIREBASE_API_KEY=\\nVITE_FIREBASE_AUTH_DOMAIN=\\nVITE_FIREBASE_DATABASE_URL=\\nVITE_FIREBASE_PROJECT_ID=\\nVITE_FIREBASE_STORAGE_BUCKET=\\nVITE_FIREBASE_MESSAGING_SENDER_ID=\\nVITE_FIREBASE_APP_ID=`;
   async function copy() {
@@ -338,15 +382,69 @@ function Setup() {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
-  return <AppShell><div className="setup-page"><div className="setup-hero"><div className="setup-mark"><Database size={26} /></div><p className="eyebrow">Connection setup</p><h1>One shared source of truth.</h1><p>Steepbridge uses Firebase Realtime Database so both shops see the same request the moment it is made. No refresh, no radioing across the lane.</p></div><div className="setup-grid"><section className="panel setup-card"><div className="step-number">01</div><h2>Create a Firebase project</h2><p>In the Firebase console, create a project and add a Web app. No analytics or authentication are required for this shared workspace.</p><a className="text-link" href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" data-testid="link-firebase-console">Open Firebase Console <ArrowRight size={14} /></a></section><section className="panel setup-card"><div className="step-number">02</div><h2>Turn on Realtime Database</h2><p>Create a Realtime Database in the region closest to your shops. For a private deployment, add your own security rules before sharing the URL.</p><div className="code-chip">shopBridge / orders · inventory · restocks</div></section><section className="panel setup-card setup-wide"><div className="step-number">03</div><h2>Paste the web config into <span className="mono">.env</span></h2><p>Copy these keys into <span className="mono">artifacts/shop-bridge/.env</span>, then restart the dev server. The app detects the config on startup.</p><div className="env-block"><pre>{envText}</pre><button className="copy-button" onClick={copy} data-testid="button-copy-env">{copied ? <><Check size={14} /> Copied</> : "Copy keys"}</button></div></section></div><div className="demo-callout"><div className="demo-callout-icon"><Signal size={19} /></div><div><strong>Working in demo mode right now</strong><p>That is okay for a walk-through. Requests and inventory changes are stored locally in this browser. Connect Firebase when both shop teams are ready to share a live lane.</p></div><Link href="/shop1" className="button button-secondary" data-testid="link-return-demo">Return to workspace</Link></div></div></AppShell>;
+  return <AppShell session={session} onLogout={onLogout}><div className="setup-page"><div className="setup-hero"><div className="setup-mark"><Database size={26} /></div><p className="eyebrow">Connection setup</p><h1>One shared source of truth.</h1><p>Steepbridge uses Firebase Realtime Database so both shops see the same request the moment it is made. No refresh, no radioing across the lane.</p></div><div className="setup-grid"><section className="panel setup-card"><div className="step-number">01</div><h2>Create a Firebase project</h2><p>In the Firebase console, create a project and add a Web app. The app uses a simple business ID sign-in, so no external authentication service is required for this workflow.</p><a className="text-link" href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" data-testid="link-firebase-console">Open Firebase Console <ArrowRight size={14} /></a></section><section className="panel setup-card"><div className="step-number">02</div><h2>Turn on Realtime Database</h2><p>Create a Realtime Database in the region closest to your shops. For a private deployment, add your own security rules before sharing the URL.</p><div className="code-chip">businesses / your-business-id / orders · inventory · restocks</div></section><section className="panel setup-card setup-wide"><div className="step-number">03</div><h2>Paste the web config into <span className="mono">.env</span></h2><p>Copy these keys into <span className="mono">artifacts/shop-bridge/.env</span>, then restart the dev server. The app detects the config on startup.</p><div className="env-block"><pre>{envText}</pre><button className="copy-button" onClick={copy} data-testid="button-copy-env">{copied ? <><Check size={14} /> Copied</> : "Copy keys"}</button></div></section></div><div className="demo-callout"><div className="demo-callout-icon"><Signal size={19} /></div><div><strong>Business ID pairing</strong><p>Both devices must sign in with the same business ID. A different business ID opens a separate workspace and cannot see the other shop.</p></div><Link href="/shop1" className="button button-secondary" data-testid="link-return-demo">Return to workspace</Link></div></div></AppShell>;
 }
 
-function Landing() {
-  return <Redirect to="/shop1" />;
+function LoginPage({ onLogin }: { onLogin: (session: ShopSession) => void }) {
+  const [role, setRole] = useState<ShopRole>("shop1");
+  const [username, setUsername] = useState("");
+  const [businessId, setBusinessId] = useState("");
+  const [error, setError] = useState("");
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const cleanUsername = username.trim();
+    const cleanBusinessId = businessId.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!cleanUsername || !cleanBusinessId) {
+      setError("Enter your name and the business ID shared by both shops.");
+      return;
+    }
+    const session = { username: cleanUsername, businessId: cleanBusinessId, role };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    onLogin(session);
+  }
+
+  return <div className="login-screen">
+    <div className="login-card">
+      <div className="login-brand"><span className="brand-mark"><Leaf size={22} strokeWidth={2.5} /></span><span><strong>Steep</strong><em>bridge</em></span></div>
+      <p className="eyebrow">Two-shop sign in</p>
+      <h1>Open your shared shelf.</h1>
+      <p className="login-copy">Use the same business ID on both devices. Shop 1 and Shop 2 will only see each other when that ID matches.</p>
+      <form onSubmit={submit} className="login-form">
+        <label>Your name<input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="e.g. Arun" autoComplete="name" data-testid="input-login-username" /></label>
+        <label>Business ID<input value={businessId} onChange={(event) => setBusinessId(event.target.value)} placeholder="e.g. sunrise-tea-01" autoCapitalize="none" data-testid="input-login-business-id" /><small>Give the exact same ID to both shops.</small></label>
+        <fieldset>
+          <legend>Which shop are you using?</legend>
+          <div className="role-grid">
+            <label className={`role-option ${role === "shop1" ? "role-option-active" : ""}`}><input type="radio" name="shop-role" value="shop1" checked={role === "shop1"} onChange={() => setRole("shop1")} /><span><strong>Shop 1</strong><small>Send requests and manage one-unit changes</small></span></label>
+            <label className={`role-option ${role === "shop2" ? "role-option-active" : ""}`}><input type="radio" name="shop-role" value="shop2" checked={role === "shop2"} onChange={() => setRole("shop2")} /><span><strong>Shop 2</strong><small>Confirm requests and manage stock</small></span></label>
+          </div>
+        </fieldset>
+        {error && <p className="login-error" role="alert">{error}</p>}
+        <button className="button button-primary login-submit" type="submit" data-testid="button-login"><UserRound size={18} /> Enter shared workspace <ArrowRight size={16} /></button>
+      </form>
+      <p className="login-footnote"><span className="tiny-dot" /> Only two roles are available for each business ID.</p>
+    </div>
+  </div>;
 }
 
 function App() {
-  return <Switch><Route path="/shop1" component={ShopOne} /><Route path="/shop2" component={ShopTwo} /><Route path="/setup" component={Setup} /><Route path="/" component={Landing} /><Route><Redirect to="/shop1" /></Route></Switch>;
+  const [session, setSession] = useState<ShopSession | null>(() => readSession());
+  function logout() {
+    localStorage.removeItem(SESSION_KEY);
+    setSession(null);
+  }
+  if (!session) {
+    return <Switch><Route path="/login"><LoginPage onLogin={setSession} /></Route><Route><Redirect to="/login" /></Route></Switch>;
+  }
+  return <Switch>
+    <Route path="/shop1"><ShopOne session={session} onLogout={logout} /></Route>
+    <Route path="/shop2"><ShopTwo session={session} onLogout={logout} /></Route>
+    <Route path="/setup"><Setup session={session} onLogout={logout} /></Route>
+    <Route path="/login"><Redirect to="/shop1" /></Route>
+    <Route path="/"><Redirect to={session.role === "shop2" ? "/shop2" : "/shop1"} /></Route>
+    <Route><Redirect to={session.role === "shop2" ? "/shop2" : "/shop1"} /></Route>
+  </Switch>;
 }
 
 export default App;
