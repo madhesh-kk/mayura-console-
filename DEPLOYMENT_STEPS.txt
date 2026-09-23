@@ -1,0 +1,193 @@
+================================================================================
+COMPLETE DEPLOYMENT STEPS FOR VERCEL
+================================================================================
+
+You are here: Step 1 - Preparation
+
+================================================================================
+STEP 1: PREPARE (2 minutes)
+================================================================================
+
+WHAT YOU NEED:
+✅ Your Render API URL (find it at https://render.com/dashboard)
+   Format: https://api-xxxxx.onrender.com
+
+FILES ALREADY CREATED:
+✅ vercel.json (root level)
+✅ .env.production (artifacts/shop-bridge/)
+
+ACTION NEEDED:
+1. Get your Render API URL from Render dashboard
+2. COPY the URL
+3. This URL will be used in Step 3
+
+================================================================================
+STEP 2: PUSH CODE TO GITHUB (2 minutes)
+================================================================================
+
+Open PowerShell and run:
+
+cd e:\transfer_replit\Two-Shop-Order-and-Inventory
+
+git add .
+
+git commit -m "Deploy to Vercel: add configuration files"
+
+git push origin main
+
+✓ Code is now on GitHub and ready for deployment
+
+================================================================================
+STEP 3: DEPLOY ON VERCEL (5 minutes)
+================================================================================
+
+A. CREATE VERCEL ACCOUNT (if you don't have one)
+   1. Go to https://vercel.com
+   2. Click "Sign Up"
+   3. Choose "Continue with GitHub"
+   4. Authorize Vercel to access your GitHub
+
+B. IMPORT PROJECT
+   1. In Vercel Dashboard, click "Add New Project"
+   2. Find and select your GitHub repo: madhesh-kk/mayura-console-
+   3. Click "Import"
+
+C. CONFIGURE BUILD SETTINGS
+   Look for these fields and fill them in:
+
+   Framework Preset: Vite
+   Root Directory: (leave blank)
+   
+   Build Command: 
+   pnpm --filter @workspace/shop-bridge run build
+   
+   Output Directory: 
+   artifacts/shop-bridge/dist/public
+   
+   Install Command: (leave default or empty)
+
+D. ADD ENVIRONMENT VARIABLES
+   Click "Environment Variables" section
+   
+   Add this variable:
+   
+   Key: VITE_API_URL
+   Value: [PASTE YOUR RENDER API URL HERE]
+   
+   Example: https://api-dapptkt2abc123.onrender.com
+
+E. DEPLOY
+   Click the blue "Deploy" button
+   
+   Wait 2-3 minutes for deployment to complete
+   
+   You'll see: "Congratulations! Your deployment is ready"
+
+================================================================================
+STEP 4: GET YOUR LIVE FRONTEND URL (1 minute)
+================================================================================
+
+After deployment completes:
+
+✓ You'll see a URL like: https://mayura-console.vercel.app
+✓ This is your frontend URL
+✓ Save this URL
+
+Your deployment is now:
+- Frontend: https://mayura-console.vercel.app (or your custom URL)
+- Backend: https://your-render-api.onrender.com
+
+================================================================================
+STEP 5: TEST YOUR DEPLOYMENT (3 minutes)
+================================================================================
+
+1. Open your Vercel URL in browser: https://mayura-console.vercel.app
+
+2. You should see the LOGIN page
+
+3. Log in with test credentials:
+   Business ID: 1805
+   Role: shop1
+   Name: Test User
+
+4. If it works:
+   ✓ You see the dashboard
+   ✓ You can create orders
+   ✓ Data is saved
+   
+   SUCCESS! 🎉
+
+5. If it doesn't work:
+   ✗ Check browser console (F12 → Console)
+   ✗ Look for error messages
+   ✗ Check Vercel Logs: Dashboard → Deployments → Latest → Logs
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+ERROR: "Business ID verification is unavailable"
+→ Fix: Your API URL is wrong
+→ Action: Go to Vercel Project Settings → Environment Variables
+→ Update VITE_API_URL to correct Render URL
+→ Redeploy
+
+ERROR: Build failed
+→ Check: Vercel Dashboard → Deployments → Failed deployment → Logs
+→ Look for: Build command, dependencies, or missing files
+
+ERROR: Page is blank
+→ Fix: Output directory is wrong
+→ Verify in Vercel: artifacts/shop-bridge/dist/public
+
+ERROR: API not responding
+→ Check: Is your Render API still running?
+→ Test: Visit https://your-render-api.onrender.com/api/healthz
+→ Should return 200 OK
+
+================================================================================
+FINAL CHECKLIST
+================================================================================
+
+Before you declare "SUCCESS":
+
+✅ Frontend loads at Vercel URL
+✅ Login page appears
+✅ Can log in with Business ID 1805
+✅ Can create and view orders
+✅ Different Business IDs keep separate data
+✅ No errors in browser console (F12)
+✅ API calls are going to Render URL (Network tab)
+
+================================================================================
+WHAT'S NEXT? (Optional)
+================================================================================
+
+1. Set up custom domain (in Vercel settings)
+2. Enable automatic deployments (usually enabled by default)
+3. Monitor performance in Vercel Analytics
+4. Set up Firebase for real-time data (if needed)
+5. Configure database (if needed)
+
+================================================================================
+SUPPORT LINKS
+================================================================================
+
+Vercel Docs: https://vercel.com/docs
+Render Docs: https://render.com/docs
+GitHub: https://github.com/madhesh-kk/mayura-console-
+My Vercel Dashboard: https://vercel.com/dashboard
+My Render Dashboard: https://render.com/dashboard
+
+================================================================================
+YOU'RE DONE! 🎉
+================================================================================
+
+Your project is now live on Vercel!
+
+Frontend: https://mayura-console.vercel.app
+Backend: https://your-render-api.onrender.com
+
+Share this URL with users to access the app.
+
+Questions? Check VERCEL_DEPLOYMENT.md or QUICK_START_DEPLOYMENT.md
