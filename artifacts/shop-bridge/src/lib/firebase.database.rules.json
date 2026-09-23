@@ -19,7 +19,7 @@
           "restocks": {
             "$restockId": {
               ".write": "auth != null && newData.exists()",
-              ".validate": "newData.hasChildren(['itemName', 'restockedQuantity', 'timestamp']) && newData.child('itemName').isString() && newData.child('itemName').val().length > 0 && newData.child('itemName').val().length <= 80 && newData.child('restockedQuantity').isNumber() && newData.child('restockedQuantity').val() >= 1 && newData.child('restockedQuantity').val() <= 99 && newData.child('restockedQuantity').val() % 1 == 0 && newData.child('timestamp').isNumber()"
+              ".validate": "newData.hasChildren(['id', 'itemName', 'restockedQuantity', 'timestamp']) && newData.child('id').isString() && newData.child('id').val() == $restockId && newData.child('itemName').isString() && newData.child('itemName').val().length > 0 && newData.child('itemName').val().length <= 80 && newData.child('restockedQuantity').isNumber() && newData.child('restockedQuantity').val() >= 1 && newData.child('restockedQuantity').val() <= 99 && newData.child('restockedQuantity').val() % 1 == 0 && newData.child('timestamp').isNumber() && (!newData.child('acknowledgedAt').exists() || newData.child('acknowledgedAt').isNumber()) && (!newData.child('acknowledgedBy').exists() || newData.child('acknowledgedBy').isString())"
             }
           },
           "presence": {

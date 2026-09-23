@@ -3,7 +3,10 @@ import { getAuth, onAuthStateChanged, signInAnonymously, type Auth } from "fireb
 import { getDatabase, onDisconnect, onValue, push, ref, runTransaction, set, update, type Database } from "firebase/database";
 
 export type OrderStatus = "pending" | "confirmed" | "completed";
-export type ShopRole = "shop1" | "shop2";
+export type ShopRole = "shop1" | "shop2" | "owner";
+
+export type CatalogItem = { id: string; name: string; price: number; category?: string; stock: number };
+export type OrderLineItem = { itemId: string; itemName: string; quantity: number; unitPrice: number; subtotal: number; category?: string };
 
 export type Order = {
   id: string;
@@ -14,6 +17,10 @@ export type Order = {
   timeConfirmed?: number;
   timeAcknowledged?: number;
   reminderNeeded: boolean;
+  requesterName?: string;
+  items?: OrderLineItem[];
+  total?: number;
+  ownerId?: string;
 };
 
 export type InventoryItem = {
@@ -24,15 +31,19 @@ export type InventoryItem = {
 };
 
 export type RestockHistory = {
+  id: string;
   itemName: string;
   restockedQuantity: number;
   timestamp: number;
+  acknowledgedAt?: number;
+  acknowledgedBy?: string;
 };
 
 export type BridgeSnapshot = {
   orders: Order[];
   inventory: InventoryItem[];
   restocks: RestockHistory[];
+  catalog: CatalogItem[];
 };
 
 export type ShopPresence = {
@@ -92,13 +103,14 @@ function businessPath(businessId: string) {
 
 export function watchLiveBridge(businessId: string, onSnapshot: (snapshot: BridgeSnapshot) => void, onError?: (error: Error) => void) {
   if (!database) return () => undefined;
-  let current: BridgeSnapshot = { orders: [], inventory: [], restocks: [] };
+  let current: BridgeSnapshot = { orders: [], inventory: [], restocks: [], catalog: [] };
   const stop = onValue(ref(database, businessPath(businessId)), (value) => {
     const data = value.val() ?? {};
     current = {
       orders: Object.values(data.orders ?? {}) as Order[],
       inventory: Object.values(data.inventory ?? {}) as InventoryItem[],
       restocks: Object.values(data.restocks ?? {}) as RestockHistory[],
+      catalog: Object.values(data.catalog ?? {}) as CatalogItem[],
     };
     onSnapshot(current);
   }, (error) => onError?.(error));
@@ -156,8 +168,16 @@ export async function writeInventory(businessId: string, item: InventoryItem) {
 export async function writeRestock(businessId: string, restock: RestockHistory) {
   if (!database) return;
   await ensureLiveAccess();
-  const restockRef = push(ref(database, `${businessPath(businessId)}/restocks`));
-  await set(restockRef, restock);
+  await set(ref(database, `${businessPath(businessId)}/restocks/${restock.id}`), restock);
+}
+
+export async function acknowledgeRestock(businessId: string, id: string, acknowledgedBy: string) {
+  if (!database) return;
+  await ensureLiveAccess();
+  await update(ref(database, `${businessPath(businessId)}/restocks/${id}`), {
+    acknowledgedAt: Date.now(),
+    acknowledgedBy,
+  });
 }
 
 export async function registerPresence(businessId: string, presence: ShopPresence) {

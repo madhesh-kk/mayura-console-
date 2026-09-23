@@ -30,6 +30,10 @@ function speak(text: string, tone: AlertTone) {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "ta-IN";
+  const tamilVoice = window.speechSynthesis
+    .getVoices()
+    .find((voice) => voice.lang.toLowerCase() === "ta-in" || voice.lang.toLowerCase().startsWith("ta-"));
+  if (tamilVoice) utterance.voice = tamilVoice;
   utterance.rate = tone === "low-stock" ? 0.84 : 0.9;
   utterance.pitch = 1;
   window.speechSynthesis.speak(utterance);
