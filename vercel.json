@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "artifacts/shop-bridge/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "artifacts/shop-bridge/dist/public"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "artifacts/shop-bridge/dist/public/$1"
+    }
+  ],
+  "env": {
+    "VITE_API_URL": "@vite-api-url"
+  },
+  "buildCommand": "pnpm --filter @workspace/shop-bridge run build",
+  "outputDirectory": "artifacts/shop-bridge/dist/public"
+}
