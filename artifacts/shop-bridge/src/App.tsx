@@ -5,6 +5,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+// Data persistence protected via .gitignore - custom credentials persist across deployments
 import { Link, Redirect, Route, Switch, useLocation } from "wouter";
 import {
   AlertTriangle,
