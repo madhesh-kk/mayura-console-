@@ -48,8 +48,13 @@ async function loadOwnerAccounts() {
           }
         });
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        // File doesn't exist - initialize with default credentials for demo
+        const defaultPassword = await hashPassword("12345678");
+        ownerAccounts.set("6565", { username: "mayura", ...defaultPassword });
+        ownerAccounts.set("180586", { username: "mayura", ...defaultPassword });
+        await saveOwnerAccounts();
       });
   }
   await accountsLoaded;
