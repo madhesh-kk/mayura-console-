@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Data files - should not be version controlled (kept on server only)
+artifacts/data/owner-accounts.json
+artifacts/data/business-id-history.json
