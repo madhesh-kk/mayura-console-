@@ -1230,18 +1230,21 @@ function ShopOne({
   }
 
   const selectedItem =
-    data.catalog.find((item) => item.id === itemId) ?? data.catalog[0];
+    data.catalog.find((item) => item.id === itemId && item.stock <= 3) ?? 
+    data.catalog.find((item) => item.stock <= 3);
   const catalogGroups = useMemo(
     () =>
-      data.catalog.reduce<Record<string, CatalogItem[]>>((groups, item) => {
-        const category = item.category?.trim() || "Uncategorized";
-        const key =
-          Object.keys(groups).find(
-            (existing) => existing.toLowerCase() === category.toLowerCase(),
-          ) ?? category;
-        (groups[key] ??= []).push(item);
-        return groups;
-      }, {}),
+      data.catalog
+        .filter((item) => item.stock <= 3)
+        .reduce<Record<string, CatalogItem[]>>((groups, item) => {
+          const category = item.category?.trim() || "Uncategorized";
+          const key =
+            Object.keys(groups).find(
+              (existing) => existing.toLowerCase() === category.toLowerCase(),
+            ) ?? category;
+          (groups[key] ??= []).push(item);
+          return groups;
+        }, {}),
     [data.catalog],
   );
   function addToCart() {
