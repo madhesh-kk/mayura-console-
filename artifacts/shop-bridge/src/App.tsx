@@ -1312,23 +1312,32 @@ function ShopOne({
             <label>
               Item
               <select
-                value={itemId || data.catalog[0]?.id || ""}
+                value={itemId || ""}
                 onChange={(event) => setItemId(event.target.value)}
                 data-testid="select-order-item"
               >
-                {Object.entries(catalogGroups).map(([category, items]) => (
-                  <optgroup label={category} key={category}>
-                    {items.map((item) => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                        disabled={!isTeaItem(item) && item.stock === 0}
-                      >
-                        {item.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
+                <option value="">Select an item with low stock...</option>
+                {Object.entries(catalogGroups).map(([category, items]) => {
+                  const lowStockItems = items.filter(item => {
+                    const inventoryItem = data.inventory.find(inv => inv.itemName === item.name);
+                    return inventoryItem && inventoryItem.currentStock <= inventoryItem.lowStockThreshold;
+                  });
+                  return lowStockItems.length > 0 ? (
+                    <optgroup label={category} key={category}>
+                      {lowStockItems.map((item) => {
+                        const inventoryItem = data.inventory.find(inv => inv.itemName === item.name);
+                        return (
+                          <option
+                            key={item.id}
+                            value={item.id}
+                          >
+                            {item.name} ({inventoryItem?.currentStock || 0} in stock)
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ) : null;
+                })}
               </select>
             </label>
             <label>
