@@ -2047,7 +2047,7 @@ function SecurityPage({
       setNewBusinessId(updatedBusinessId);
       setOldPassword("");
       setNewPassword("");
-      setMessage("Owner account updated.");
+      setMessage("Owner account updated successfully. Your new credentials are now active.");
     } catch {
       setError(
         "Security service is unavailable. Start the local API server and try again.",
