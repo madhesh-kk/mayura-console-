@@ -175,6 +175,14 @@ function isTeaItem(item: CatalogItem) {
   return item.category?.trim().toLowerCase() === "tea";
 }
 
+function isCoffeeItem(item: CatalogItem) {
+  return item.category?.trim().toLowerCase() === "coffee";
+}
+
+function isNonCountableItem(item: CatalogItem) {
+  return isTeaItem(item) || isCoffeeItem(item);
+}
+
 function AppShell({
   children,
   session,
@@ -1132,12 +1140,12 @@ function CatalogManager({
                 </button>
                 {expanded && categoryItems.map((item) => (
                   <div
-                    className={`catalog-row ${!isTeaItem(item) && item.stock === 0 ? "catalog-row-out" : ""}`}
+                    className={`catalog-row ${!isNonCountableItem(item) && item.stock === 0 ? "catalog-row-out" : ""}`}
                     key={item.id}
                   >
                     <div className="catalog-item-info">
                       <strong>{item.name}</strong>
-                      {!isTeaItem(item) && (
+                      {!isNonCountableItem(item) && (
                         <div className="catalog-stock-control">
                           <button className="stock-stepper" onClick={() => void onSave({ ...item, stock: Math.max(0, item.stock - 1) })} aria-label={`Decrease ${item.name} stock`}>−</button>
                           <strong>{item.stock}</strong>
@@ -1145,7 +1153,7 @@ function CatalogManager({
                         </div>
                       )}
                     </div>
-                    {!isTeaItem(item) && (
+                    {!isNonCountableItem(item) && (
                       <span className={`catalog-status ${item.stock === 0 ? "catalog-status-out" : "catalog-status-available"}`}>
                         {item.stock === 0 ? "Out of stock" : "In stock"}
                       </span>
@@ -1326,7 +1334,7 @@ function ShopOne({
                       <option
                         key={item.id}
                         value={item.id}
-                        disabled={!isTeaItem(item) && item.stock === 0}
+                        disabled={!isNonCountableItem(item) && item.stock === 0}
                       >
                         {item.name}
                       </option>
