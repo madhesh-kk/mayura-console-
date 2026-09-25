@@ -35,48 +35,9 @@ const starterCatalog: CatalogItem[] = [
 ];
 
 const seed: BridgeSnapshot = {
-  orders: [
-    {
-      id: "ord-101",
-      itemName: "Jasmine Green",
-      quantity: 4,
-      status: "pending",
-      timeRequested: Date.now() - 1000 * 60 * 18,
-      reminderNeeded: true,
-    },
-    {
-      id: "ord-098",
-      itemName: "Earl Grey",
-      quantity: 3,
-      status: "completed",
-      timeRequested: Date.now() - 1000 * 60 * 60 * 4,
-      timeConfirmed: Date.now() - 1000 * 60 * 60 * 3.8,
-      timeAcknowledged: Date.now() - 1000 * 60 * 60 * 2.9,
-      reminderNeeded: false,
-    },
-    {
-      id: "ord-100",
-      itemName: "Oolong",
-      quantity: 2,
-      status: "confirmed",
-      timeRequested: Date.now() - 1000 * 60 * 45,
-      timeConfirmed: Date.now() - 1000 * 60 * 39,
-      reminderNeeded: false,
-    },
-  ],
-  inventory: [
-    { itemName: "Jasmine Green", currentStock: 5, lowStockThreshold: 8, lastRestockedTime: Date.now() - 1000 * 60 * 60 * 27 },
-    { itemName: "Earl Grey", currentStock: 14, lowStockThreshold: 8, lastRestockedTime: Date.now() - 1000 * 60 * 60 * 12 },
-    { itemName: "Oolong", currentStock: 7, lowStockThreshold: 6, lastRestockedTime: Date.now() - 1000 * 60 * 60 * 52 },
-    { itemName: "Chamomile", currentStock: 18, lowStockThreshold: 10, lastRestockedTime: Date.now() - 1000 * 60 * 60 * 20 },
-    { itemName: "Peppermint", currentStock: 3, lowStockThreshold: 6, lastRestockedTime: Date.now() - 1000 * 60 * 60 * 78 },
-    { itemName: "Masala Chai", currentStock: 11, lowStockThreshold: 7, lastRestockedTime: Date.now() - 1000 * 60 * 60 * 8 },
-  ],
-  restocks: [
-    { id: "restock-seed-earl-grey", itemName: "Earl Grey", restockedQuantity: 12, timestamp: Date.now() - 1000 * 60 * 60 * 12 },
-    { id: "restock-seed-masala-chai", itemName: "Masala Chai", restockedQuantity: 8, timestamp: Date.now() - 1000 * 60 * 60 * 8 },
-    { id: "restock-seed-chamomile", itemName: "Chamomile", restockedQuantity: 10, timestamp: Date.now() - 1000 * 60 * 60 * 20 },
-  ],
+  orders: [],
+  inventory: [],
+  restocks: [],
   catalog: starterCatalog,
 };
 
