@@ -1026,9 +1026,10 @@ function CatalogManager({
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-  const teaCategory = draft.category?.trim().toLowerCase() === "tea";
-  const coffeeCategory = draft.category?.trim().toLowerCase() === "coffee";
-  const nonCountableCategory = teaCategory || coffeeCategory;
+  
+  // Calculate if this is a non-countable category
+  const currentCategory = draft.category?.trim().toLowerCase() || "";
+  const isNonCountable = currentCategory === "tea" || currentCategory === "coffee";
   const groupedItems = useMemo(() => {
     const groups = new Map<string, CatalogItem[]>();
     for (const item of items) {
@@ -1082,7 +1083,7 @@ function CatalogManager({
             aria-label="Item price"
           />
         </label>
-        {!nonCountableCategory && (
+        {!isNonCountable && (
           <label>
             Stock count
             <input
