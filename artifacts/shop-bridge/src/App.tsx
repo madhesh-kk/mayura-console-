@@ -1027,6 +1027,8 @@ function CatalogManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const teaCategory = draft.category?.trim().toLowerCase() === "tea";
+  const coffeeCategory = draft.category?.trim().toLowerCase() === "coffee";
+  const nonCountableCategory = teaCategory || coffeeCategory;
   const groupedItems = useMemo(() => {
     const groups = new Map<string, CatalogItem[]>();
     for (const item of items) {
@@ -1080,7 +1082,7 @@ function CatalogManager({
             aria-label="Item price"
           />
         </label>
-        {!teaCategory && (
+        {!nonCountableCategory && (
           <label>
             Stock count
             <input
