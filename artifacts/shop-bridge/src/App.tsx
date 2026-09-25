@@ -1028,13 +1028,10 @@ function CatalogManager({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   
   // Calculate if this is a non-countable category (Tea & Coffee don't track stock)
-  const currentCategory = draft.category?.trim().toLowerCase() || "";
-  const isNonCountable = currentCategory === "tea" || currentCategory === "coffee";
-  
-  // Debug log for troubleshooting
-  useEffect(() => {
-    console.log("Category changed:", { currentCategory, isNonCountable, draftCategory: draft.category });
-  }, [currentCategory, isNonCountable, draft.category]);
+  const isNonCountable = useMemo(() => {
+    const cat = draft.category?.trim().toLowerCase() || "";
+    return cat === "tea" || cat === "coffee";
+  }, [draft.category]);
   const groupedItems = useMemo(() => {
     const groups = new Map<string, CatalogItem[]>();
     for (const item of items) {
