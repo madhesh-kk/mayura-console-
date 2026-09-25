@@ -1059,6 +1059,17 @@ function CatalogManager({
         <SectionHeading title="Add item" />
         <form className="catalog-form" onSubmit={submit}>
         <label>
+          Category
+          <input
+            placeholder="e.g. Tea"
+            value={draft.category ?? ""}
+            onChange={(event) =>
+              setDraft({ ...draft, category: event.target.value })
+            }
+            aria-label="Item category"
+          />
+        </label>
+        <label>
           Name
           <input
             placeholder="Item name"
@@ -1098,17 +1109,6 @@ function CatalogManager({
             />
           </label>
         )}
-        <label>
-          Category
-          <input
-            placeholder="e.g. Tea"
-            value={draft.category ?? ""}
-            onChange={(event) =>
-              setDraft({ ...draft, category: event.target.value })
-            }
-            aria-label="Item category"
-          />
-        </label>
         <button className="button button-primary" type="submit">
           {editingId ? "Save item" : "Add item"}
         </button>
